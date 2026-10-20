@@ -75,10 +75,15 @@ class SettingsViewModel(
     fun exportData(outputStream: OutputStream) {
         viewModelScope.launch {
             try {
-                // Export does NOT contain keys, secrets, or internal configs
-                val entities = lessonDao.getLessonsForDocumentSync("") // Or all
-                // Get all lessons from database safely
-                val allEntities = lessonDao.deleteAllLessons() // wait, no! Don't delete!
+                // Export contains only generated learning cards; NO secrets, keys, or internal tokens
+                val entities = lessonDao.getAllLessonsSync()
+                val lessons = entities.map { it.toDomain() }
+                val export = ExportData(lessons = lessons)
+                val jsonString = Json { prettyPrint = true }.encodeToString(export)
+                outputStream.use { out ->
+                    out.write(jsonString.toByteArray(Charsets.UTF_8))
+                }
+                _uiEvents.emit(SettingsUiEvent.ShowMessage("All lessons exported successfully."))
             } catch (e: Exception) {
                 _uiEvents.emit(SettingsUiEvent.ShowMessage("Export failed: ${e.message}"))
             }

@@ -16,6 +16,9 @@ interface LessonDao {
     @Query("SELECT * FROM lessons WHERE documentId = :documentId ORDER BY orderIndex ASC")
     suspend fun getLessonsForDocumentSync(documentId: String): List<LessonEntity>
 
+    @Query("SELECT * FROM lessons ORDER BY documentId ASC, orderIndex ASC")
+    suspend fun getAllLessonsSync(): List<LessonEntity>
+
     @Query("SELECT * FROM lessons WHERE documentId = :documentId AND bookmarked = 1 ORDER BY orderIndex ASC")
     fun getBookmarkedLessons(documentId: String): Flow<List<LessonEntity>>
 

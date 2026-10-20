@@ -15,9 +15,11 @@ import app.studyscroll.domain.model.ProviderProfile
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 sealed class InspectUiEvent {
@@ -45,7 +47,7 @@ class PdfInspectViewModel(
     val sampleExcerpt: StateFlow<String> = _sampleExcerpt.asStateFlow()
 
     val providers: StateFlow<List<ProviderProfile>> = providerManager.allProviders
-        .stateInScope(viewModelScope, emptyList())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _selectedProviderId = MutableStateFlow("provider_offline")
     val selectedProviderId: StateFlow<String> = _selectedProviderId.asStateFlow()
@@ -143,9 +145,4 @@ class PdfInspectViewModel(
             }
         }
     }
-
-    private fun <T> kotlinx.coroutines.flow.Flow<T>.stateInScope(
-        scope: kotlinx.coroutines.CoroutineScope,
-        initialValue: T
-    ): StateFlow<T> = this.stateIn(scope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), initialValue)
 }

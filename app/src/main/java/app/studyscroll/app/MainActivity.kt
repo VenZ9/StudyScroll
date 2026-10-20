@@ -10,6 +10,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
+import app.studyscroll.data.repository.AppSettings
 import app.studyscroll.ui.theme.StudyScrollTheme
 
 class MainActivity : ComponentActivity() {
@@ -21,7 +22,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val settings by app.settingsRepository.settingsFlow.collectAsState(
-                initial = app.studyscroll.data.repository.AppSettings()
+                initial = AppSettings()
             )
 
             StudyScrollTheme(themeMode = settings.themeMode) {
