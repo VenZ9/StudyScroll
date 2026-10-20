@@ -169,7 +169,8 @@ object TextSegmenter {
     }
 
     private fun cleanHeading(line: String): String {
-        return line.replace(Regex("^[0-9]+(\\.[0-9]+)*\\s*"), "").trim()
+        val cleaned = line.replace(Regex("^(?:Chapter|Section|[0-9]+(?:\\.[0-9]+)*)\\s*[0-9IVXLCDM]*[:\\s-]*", RegexOption.IGNORE_CASE), "").trim()
+        return cleaned.ifBlank { line.trim() }
     }
 
     private fun isListItem(line: String): Boolean {

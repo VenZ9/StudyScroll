@@ -116,12 +116,14 @@ object AiResponseParser {
             val excerpt = obj.optString("excerpt", "").trim()
 
             // Verify whether excerpt matches source text
-            val confidence = if (excerpt.isNotEmpty() && combinedSourceText.contains(excerpt.take(30).lowercase())) {
-                ConfidenceLabel.HIGH
-            } else if (excerpt.isNotEmpty()) {
-                ConfidenceLabel.MEDIUM
-            } else {
-                ConfidenceLabel.UNVERIFIED
+            val excerptWords = excerpt.lowercase().split(Regex("\\s+")).filter { it.length > 3 }
+            val matchingWords = excerptWords.count { combinedSourceText.contains(it) }
+            val matchRatio = if (excerptWords.isNotEmpty()) matchingWords.toFloat() / excerptWords.size.toFloat() else 0f
+
+            val confidence = when {
+                excerpt.isNotEmpty() && combinedSourceText.contains(excerpt.take(30).lowercase()) -> ConfidenceLabel.HIGH
+                matchRatio >= 0.5f -> ConfidenceLabel.MEDIUM
+                else -> ConfidenceLabel.UNVERIFIED
             }
 
             lessons.add(
