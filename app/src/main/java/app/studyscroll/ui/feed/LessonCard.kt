@@ -244,6 +244,8 @@ fun LessonTypeBadge(type: LessonType) {
         LessonType.DIAGRAM_NOTE -> "Diagram Note"
         LessonType.QUIZ -> "Quiz"
         LessonType.SUMMARY -> "Overview"
+        LessonType.SHORT_NOTE -> "Short Note"
+        LessonType.KEY_TOPIC -> "Key Topic"
         LessonType.VOCABULARY -> "Vocabulary"
     }
 

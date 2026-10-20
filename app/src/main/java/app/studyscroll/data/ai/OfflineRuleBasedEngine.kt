@@ -30,36 +30,119 @@ class OfflineRuleBasedEngine : LessonGenerationProvider {
         val lessons = mutableListOf<RawLesson>()
         val seenTitles = mutableSetOf<String>()
 
-        // 1. Chapter Overview Card
         val firstPage = blocks.firstOrNull()?.pageNumber ?: 1
-        val headings = blocks.filter { it.type == BlockType.HEADING }.map { it.title }.take(6)
-        val overviewBullets = if (headings.isNotEmpty()) {
-            headings.map { "Section: $it" }
+        val headings = blocks.filter { it.type == BlockType.HEADING }.map { it.title }.distinct()
+
+        // =========================================================================
+        // 1. CHAPTER SUMMARY (Executive synthesis of the chapter)
+        // =========================================================================
+        val summaryBullets = if (headings.isNotEmpty()) {
+            headings.take(6).map { "Section: $it" }
         } else {
-            listOf("Source-grounded micro-lessons extracted directly from chapter text.")
+            blocks.filter { it.type == BlockType.PARAGRAPH }.take(4).map { it.title }
         }
 
+        val summaryExcerpt = blocks.firstOrNull { it.content.length > 50 }?.rawExcerpt ?: blocks.first().rawExcerpt
         lessons.add(
             RawLesson(
                 type = LessonType.SUMMARY,
-                title = "Overview: ${request.documentTitle}",
-                body = "This study deck provides focused, source-grounded micro-lessons directly extracted from ${request.documentTitle}. Review each card to master key definitions, formulas, and concepts.",
-                bullets = overviewBullets,
-                whyItMatters = "Active recall in bite-sized chunks dramatically boosts long-term conceptual retention.",
+                title = "Chapter Summary: ${request.documentTitle}",
+                body = "This chapter establishes core theoretical foundations, principles, and applications of ${request.documentTitle}. Review these verified micro-lessons and short notes for comprehensive exam mastery.",
+                bullets = summaryBullets,
+                whyItMatters = "Understanding the overarching chapter framework allows individual facts to be organized logically in long-term memory.",
                 sources = listOf(
                     SourceReference(
                         pageNumber = firstPage,
-                        excerpt = blocks.first().rawExcerpt
+                        excerpt = summaryExcerpt
                     )
                 ),
                 confidence = ConfidenceLabel.HIGH
             )
         )
 
-        // Collect definitions for creating high quality quiz cards later
+        // =========================================================================
+        // 2. EXAM-READY SHORT NOTES (High-yield quick revision cards)
+        // =========================================================================
+        val highYieldBlocks = blocks.filter {
+            it.type == BlockType.DEFINITION || it.type == BlockType.FORMULA || it.type == BlockType.LIST
+        }
+
+        if (highYieldBlocks.isNotEmpty()) {
+            // Group by page or chunk into exam-ready short note cards
+            val shortNoteChunks = highYieldBlocks.chunked(3)
+            for ((chunkIndex, chunk) in shortNoteChunks.take(4).withIndex()) {
+                val notePoints = chunk.map { block ->
+                    when (block.type) {
+                        BlockType.DEFINITION -> "${block.title}: ${block.content.take(120)}"
+                        BlockType.FORMULA -> "Formula: ${block.content}"
+                        BlockType.LIST -> "${block.title} (${block.items.take(3).joinToString("; ")})"
+                        else -> "${block.title} — ${block.content.take(100)}"
+                    }
+                }
+
+                val primaryBlock = chunk.first()
+                lessons.add(
+                    RawLesson(
+                        type = LessonType.SHORT_NOTE,
+                        title = "Short Notes: Part ${chunkIndex + 1} (Exam-Ready)",
+                        body = "Must-know high-yield points for quick revision and exam recall:",
+                        bullets = notePoints,
+                        whyItMatters = "Rapid review before examinations reinforces critical formulas and definitions.",
+                        sources = listOf(
+                            SourceReference(
+                                pageNumber = primaryBlock.pageNumber,
+                                excerpt = primaryBlock.rawExcerpt
+                            )
+                        ),
+                        confidence = ConfidenceLabel.HIGH
+                    )
+                )
+            }
+        }
+
+        // =========================================================================
+        // 3. KEY TOPICS (In-depth breakdowns of major chapter sections)
+        // =========================================================================
+        val headingBlocks = blocks.filter { it.type == BlockType.HEADING }
+        for (hBlock in headingBlocks.take(8)) {
+            val normalized = hBlock.title.trim().lowercase()
+            if (seenTitles.contains(normalized)) continue
+            seenTitles.add(normalized)
+
+            // Find paragraphs following this heading
+            val relatedParagraphs = blocks.filter {
+                it.pageNumber == hBlock.pageNumber && it.type == BlockType.PARAGRAPH
+            }.take(3)
+
+            val topicBullets = relatedParagraphs.map { p ->
+                val firstSentence = p.content.split(Regex("[.!?]")).firstOrNull()?.trim() ?: p.content
+                firstSentence.take(120)
+            }
+
+            val topicExcerpt = relatedParagraphs.firstOrNull()?.rawExcerpt ?: hBlock.rawExcerpt
+            lessons.add(
+                RawLesson(
+                    type = LessonType.KEY_TOPIC,
+                    title = "Key Topic: ${hBlock.title}",
+                    body = "Comprehensive breakdown of ${hBlock.title} from page ${hBlock.pageNumber}:",
+                    bullets = if (topicBullets.isNotEmpty()) topicBullets else listOf(hBlock.content),
+                    whyItMatters = "Key topics represent core curriculum milestones and frequent exam focal points.",
+                    sources = listOf(
+                        SourceReference(
+                            pageNumber = hBlock.pageNumber,
+                            excerpt = topicExcerpt
+                        )
+                    ),
+                    confidence = ConfidenceLabel.HIGH
+                )
+            )
+        }
+
+        // =========================================================================
+        // 4. MICRO-LESSONS (Definitions, Processes, Comparisons, Formulas, Facts)
+        // =========================================================================
         val extractedDefinitions = mutableListOf<Pair<String, TextBlock>>()
 
-        // 2. Process each block into appropriate lesson type
         for (block in blocks) {
             val normalizedTitle = block.title.trim().lowercase()
             if (seenTitles.contains(normalizedTitle)) continue
@@ -89,7 +172,7 @@ class OfflineRuleBasedEngine : LessonGenerationProvider {
                     RawLesson(
                         type = LessonType.PROCESS,
                         title = block.title,
-                        body = "Step-by-step procedure detailed in the chapter:",
+                        body = "Step-by-step mechanism detailed in the text:",
                         bullets = if (steps.isNotEmpty()) steps else listOf(block.content),
                         whyItMatters = "Understanding ordered mechanisms enables correct procedural problem-solving.",
                         sources = listOf(
@@ -123,7 +206,7 @@ class OfflineRuleBasedEngine : LessonGenerationProvider {
                         type = LessonType.FORMULA,
                         title = block.title,
                         body = block.content,
-                        whyItMatters = "Quantitative relationship critical for derivations and calculations.",
+                        whyItMatters = "Quantitative relationship critical for derivations, problem solving, and calculations.",
                         sources = listOf(
                             SourceReference(
                                 pageNumber = block.pageNumber,
@@ -169,7 +252,7 @@ class OfflineRuleBasedEngine : LessonGenerationProvider {
                     } else null
                 }
 
-                BlockType.HEADING -> null // Headings are used for context and overview
+                BlockType.HEADING -> null
             }
 
             if (rawLesson != null) {
@@ -178,7 +261,9 @@ class OfflineRuleBasedEngine : LessonGenerationProvider {
             }
         }
 
-        // 3. Generate active recall Quiz cards from extracted definitions
+        // =========================================================================
+        // 5. MCQ QUIZZES & PRACTICE TESTS (4 choices, answer, and explanation)
+        // =========================================================================
         if (extractedDefinitions.isNotEmpty()) {
             for (i in extractedDefinitions.indices) {
                 val (term, block) = extractedDefinitions[i]
@@ -193,12 +278,12 @@ class OfflineRuleBasedEngine : LessonGenerationProvider {
                 lessons.add(
                     RawLesson(
                         type = LessonType.QUIZ,
-                        title = "Recall Check: $term",
-                        body = "Which concept is described by the following excerpt?",
-                        question = "\"${block.content.take(180)}\"",
+                        title = "MCQ: $term",
+                        body = "Select the correct concept that matches the verified definition below:",
+                        question = "\"${block.content.take(200)}\"",
                         answer = term,
-                        options = if (options.size >= 2) options else listOf("True", "False"),
-                        explanation = "As established on page ${block.pageNumber}, $term refers to: ${block.content.take(120)}.",
+                        options = if (options.size >= 2) options else listOf(term, "None of the above", "All of the above", "Cannot be determined"),
+                        explanation = "As established on page ${block.pageNumber}, $term refers to: ${block.content.take(140)}.",
                         sources = listOf(
                             SourceReference(
                                 pageNumber = block.pageNumber,
@@ -209,15 +294,38 @@ class OfflineRuleBasedEngine : LessonGenerationProvider {
                     )
                 )
             }
+        } else {
+            // Generate quizzes from key fact blocks if no definitions found
+            val factBlocks = blocks.filter { it.type == BlockType.PARAGRAPH && it.content.length in 50..400 }
+            for (fBlock in factBlocks.take(5)) {
+                lessons.add(
+                    RawLesson(
+                        type = LessonType.QUIZ,
+                        title = "Recall: ${fBlock.title}",
+                        body = "True or False regarding the chapter content:",
+                        question = "\"${fBlock.content.take(180)}\"",
+                        answer = "True",
+                        options = listOf("True", "False"),
+                        explanation = "Verified directly from page ${fBlock.pageNumber} of the text.",
+                        sources = listOf(
+                            SourceReference(
+                                pageNumber = fBlock.pageNumber,
+                                excerpt = fBlock.rawExcerpt
+                            )
+                        ),
+                        confidence = ConfidenceLabel.HIGH
+                    )
+                )
+            }
         }
 
-        // Limit to target count (e.g. 30-60 cards) while preserving diversity
-        val finalLessons = if (lessons.size > request.targetCount + 10) {
-            lessons.take(request.targetCount + 10)
+        // Bounded count: return well-formed lessons without empty duplicates
+        val boundedLessons = if (lessons.size > request.targetCount + 15) {
+            lessons.take(request.targetCount + 15)
         } else {
             lessons
         }
 
-        return Result.success(finalLessons)
+        return Result.success(boundedLessons)
     }
 }

@@ -9,17 +9,26 @@ import javax.crypto.spec.GCMParameterSpec
 
 object AesGcmCrypto {
     private const val VERSION: Byte = 1
-    private const val GCM_IV_LENGTH = 12 // 12 bytes recommended for GCM
-    private const val GCM_TAG_LENGTH = 128 // 128 bit auth tag
+    const val GCM_IV_LENGTH = 12 // 12 bytes recommended for GCM
+    const val GCM_TAG_LENGTH = 128 // 128 bit auth tag
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
 
     private val secureRandom = SecureRandom()
 
     fun encrypt(plaintext: ByteArray, key: Key): ByteArray {
-        val iv = ByteArray(GCM_IV_LENGTH).also { secureRandom.nextBytes(it) }
         val cipher = Cipher.getInstance(TRANSFORMATION)
-        val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
-        cipher.init(Cipher.ENCRYPT_MODE, key, spec)
+        // With AndroidKeyStore, randomized encryption is required and caller-provided IV is rejected.
+        // Calling cipher.init(Cipher.ENCRYPT_MODE, key) allows AndroidKeyStore and standard JVM to generate a cryptographically random IV.
+        try {
+            cipher.init(Cipher.ENCRYPT_MODE, key)
+        } catch (e: Exception) {
+            // Fallback for custom or legacy providers that mandate an explicit ParameterSpec
+            val fallbackIv = ByteArray(GCM_IV_LENGTH).also { secureRandom.nextBytes(it) }
+            val spec = GCMParameterSpec(GCM_TAG_LENGTH, fallbackIv)
+            cipher.init(Cipher.ENCRYPT_MODE, key, spec)
+        }
+
+        val iv = cipher.iv ?: throw IllegalStateException("Cipher failed to provide initialization vector")
         val ciphertext = cipher.doFinal(plaintext)
 
         val output = ByteArrayOutputStream()

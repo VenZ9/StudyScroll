@@ -37,6 +37,18 @@ class LessonRepository(
     fun getQuizLessons(documentId: String): Flow<List<Lesson>> =
         lessonDao.getQuizLessons(documentId).map { list -> list.map { it.toDomain() } }
 
+    fun getSummaryLessons(documentId: String): Flow<List<Lesson>> =
+        lessonDao.getSummaryLessons(documentId).map { list -> list.map { it.toDomain() } }
+
+    fun getShortNotes(documentId: String): Flow<List<Lesson>> =
+        lessonDao.getShortNoteLessons(documentId).map { list -> list.map { it.toDomain() } }
+
+    fun getKeyTopics(documentId: String): Flow<List<Lesson>> =
+        lessonDao.getKeyTopicLessons(documentId).map { list -> list.map { it.toDomain() } }
+
+    fun getMicroLessons(documentId: String): Flow<List<Lesson>> =
+        lessonDao.getMicroLessons(documentId).map { list -> list.map { it.toDomain() } }
+
     suspend fun updateBookmark(lessonId: String, bookmarked: Boolean) = withContext(Dispatchers.IO) {
         lessonDao.updateBookmark(lessonId, bookmarked)
     }

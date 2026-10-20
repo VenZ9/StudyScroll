@@ -28,6 +28,18 @@ interface LessonDao {
     @Query("SELECT * FROM lessons WHERE documentId = :documentId AND type = 'QUIZ' ORDER BY orderIndex ASC")
     fun getQuizLessons(documentId: String): Flow<List<LessonEntity>>
 
+    @Query("SELECT * FROM lessons WHERE documentId = :documentId AND type = 'SUMMARY' ORDER BY orderIndex ASC")
+    fun getSummaryLessons(documentId: String): Flow<List<LessonEntity>>
+
+    @Query("SELECT * FROM lessons WHERE documentId = :documentId AND type = 'SHORT_NOTE' ORDER BY orderIndex ASC")
+    fun getShortNoteLessons(documentId: String): Flow<List<LessonEntity>>
+
+    @Query("SELECT * FROM lessons WHERE documentId = :documentId AND type = 'KEY_TOPIC' ORDER BY orderIndex ASC")
+    fun getKeyTopicLessons(documentId: String): Flow<List<LessonEntity>>
+
+    @Query("SELECT * FROM lessons WHERE documentId = :documentId AND type NOT IN ('SUMMARY', 'SHORT_NOTE', 'KEY_TOPIC', 'QUIZ') ORDER BY orderIndex ASC")
+    fun getMicroLessons(documentId: String): Flow<List<LessonEntity>>
+
     @Query("SELECT * FROM lessons WHERE id = :id")
     suspend fun getLessonById(id: String): LessonEntity?
 

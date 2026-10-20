@@ -23,27 +23,36 @@ class KeystoreSecretStorage(
         }
     }
 
+    @Synchronized
     private fun getOrCreateSecretKey(): SecretKey {
-        if (!keyStore.containsAlias(keyAlias)) {
-            val keyGenerator = KeyGenerator.getInstance(
-                KeyProperties.KEY_ALGORITHM_AES,
-                KEYSTORE_PROVIDER
-            )
-            val parameterSpec = KeyGenParameterSpec.Builder(
-                keyAlias,
-                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
-            )
-                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                .setKeySize(256)
-                .build()
-
-            keyGenerator.init(parameterSpec)
-            return keyGenerator.generateKey()
+        try {
+            if (keyStore.containsAlias(keyAlias)) {
+                val entry = keyStore.getEntry(keyAlias, null) as? KeyStore.SecretKeyEntry
+                if (entry?.secretKey != null) {
+                    return entry.secretKey
+                }
+                // If entry exists but key is null/corrupt, remove it
+                runCatching { keyStore.deleteEntry(keyAlias) }
+            }
+        } catch (e: Exception) {
+            runCatching { keyStore.deleteEntry(keyAlias) }
         }
 
-        val entry = keyStore.getEntry(keyAlias, null) as? KeyStore.SecretKeyEntry
-        return entry?.secretKey ?: throw IllegalStateException("Keystore entry is not a SecretKeyEntry")
+        val keyGenerator = KeyGenerator.getInstance(
+            KeyProperties.KEY_ALGORITHM_AES,
+            KEYSTORE_PROVIDER
+        )
+        val parameterSpec = KeyGenParameterSpec.Builder(
+            keyAlias,
+            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+        )
+            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+            .setKeySize(256)
+            .build()
+
+        keyGenerator.init(parameterSpec)
+        return keyGenerator.generateKey()
     }
 
     override fun saveApiKey(providerId: String, apiKey: String) {
@@ -51,10 +60,24 @@ class KeystoreSecretStorage(
             removeApiKey(providerId)
             return
         }
-        val secretKey = getOrCreateSecretKey()
-        val encryptedBytes = AesGcmCrypto.encrypt(apiKey.toByteArray(Charsets.UTF_8), secretKey)
-        val encoded = Base64.encodeToString(encryptedBytes, Base64.NO_WRAP)
-        prefs.edit().putString(KEY_PREFIX + providerId, encoded).apply()
+
+        try {
+            val secretKey = getOrCreateSecretKey()
+            val encryptedBytes = AesGcmCrypto.encrypt(apiKey.trim().toByteArray(Charsets.UTF_8), secretKey)
+            val encoded = Base64.encodeToString(encryptedBytes, Base64.NO_WRAP)
+            prefs.edit().putString(KEY_PREFIX + providerId, encoded).apply()
+        } catch (e: Exception) {
+            // Attempt key recovery once in case of Keystore invalidation
+            try {
+                runCatching { keyStore.deleteEntry(keyAlias) }
+                val newKey = getOrCreateSecretKey()
+                val encryptedBytes = AesGcmCrypto.encrypt(apiKey.trim().toByteArray(Charsets.UTF_8), newKey)
+                val encoded = Base64.encodeToString(encryptedBytes, Base64.NO_WRAP)
+                prefs.edit().putString(KEY_PREFIX + providerId, encoded).apply()
+            } catch (recoveryEx: Exception) {
+                throw IllegalStateException("Unable to securely encrypt API key using Android Keystore. Please re-enter the key.")
+            }
+        }
     }
 
     override fun getApiKey(providerId: String): String? {

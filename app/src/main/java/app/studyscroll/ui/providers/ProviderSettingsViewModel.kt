@@ -66,18 +66,22 @@ class ProviderSettingsViewModel(
         apiKey: String?
     ) {
         viewModelScope.launch {
-            val providerId = id ?: "custom_${UUID.randomUUID()}"
-            val profile = ProviderProfile(
-                id = providerId,
-                type = type,
-                displayName = displayName.ifBlank { type.name },
-                baseUrl = baseUrl.trim(),
-                modelId = modelId.trim(),
-                authMode = authMode,
-                isPreferred = false
-            )
-            providerManager.saveProvider(profile, apiKey?.takeIf { it.isNotBlank() })
-            _uiEvents.emit(ProviderUiEvent.ShowMessage("Provider saved successfully."))
+            try {
+                val providerId = id ?: "custom_${UUID.randomUUID()}"
+                val profile = ProviderProfile(
+                    id = providerId,
+                    type = type,
+                    displayName = displayName.ifBlank { type.name },
+                    baseUrl = baseUrl.trim(),
+                    modelId = modelId.trim(),
+                    authMode = authMode,
+                    isPreferred = false
+                )
+                providerManager.saveProvider(profile, apiKey?.takeIf { it.isNotBlank() })
+                _uiEvents.emit(ProviderUiEvent.ShowMessage("Provider saved successfully."))
+            } catch (e: Exception) {
+                _uiEvents.emit(ProviderUiEvent.ShowMessage("Failed to save provider: ${e.message ?: "Secure encryption error"}"))
+            }
         }
     }
 
