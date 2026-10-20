@@ -264,16 +264,31 @@ class OfflineRuleBasedEngine : LessonGenerationProvider {
         // =========================================================================
         // 5. MCQ QUIZZES & PRACTICE TESTS (4 choices, answer, and explanation)
         // =========================================================================
+        val contextTerms = (
+            extractedDefinitions.map { it.first } +
+            blocks.map { it.title }.filter { it.isNotBlank() && it.length in 3..60 }
+        ).distinct()
+
         if (extractedDefinitions.isNotEmpty()) {
             for (i in extractedDefinitions.indices) {
                 val (term, block) = extractedDefinitions[i]
                 val otherTerms = extractedDefinitions
                     .filterIndexed { idx, _ -> idx != i }
                     .map { it.first }
-                    .shuffled()
-                    .take(3)
+                    .distinct()
+                    .filter { it != term }
 
-                val options = (listOf(term) + otherTerms).shuffled()
+                // Gather plausible distractors from other topics/headings in the chapter
+                val extraDistractors = contextTerms
+                    .filter { it != term && !otherTerms.contains(it) }
+                    .shuffled()
+
+                val standardFallbacks = listOf("None of the above", "All of the above", "Not specified in chapter")
+                    .filter { it != term }
+
+                val distractorPool = (otherTerms + extraDistractors + standardFallbacks).distinct()
+                val selectedDistractors = distractorPool.take(3)
+                val options = (listOf(term) + selectedDistractors).shuffled()
 
                 lessons.add(
                     RawLesson(
@@ -282,7 +297,7 @@ class OfflineRuleBasedEngine : LessonGenerationProvider {
                         body = "Select the correct concept that matches the verified definition below:",
                         question = "\"${block.content.take(200)}\"",
                         answer = term,
-                        options = if (options.size >= 2) options else listOf(term, "None of the above", "All of the above", "Cannot be determined"),
+                        options = options,
                         explanation = "As established on page ${block.pageNumber}, $term refers to: ${block.content.take(140)}.",
                         sources = listOf(
                             SourceReference(
@@ -298,14 +313,15 @@ class OfflineRuleBasedEngine : LessonGenerationProvider {
             // Generate quizzes from key fact blocks if no definitions found
             val factBlocks = blocks.filter { it.type == BlockType.PARAGRAPH && it.content.length in 50..400 }
             for (fBlock in factBlocks.take(5)) {
+                val options = listOf("True", "False", "Partially True", "Not specified in text").shuffled()
                 lessons.add(
                     RawLesson(
                         type = LessonType.QUIZ,
                         title = "Recall: ${fBlock.title}",
-                        body = "True or False regarding the chapter content:",
+                        body = "Which statement best characterizes the chapter excerpt below?",
                         question = "\"${fBlock.content.take(180)}\"",
                         answer = "True",
-                        options = listOf("True", "False"),
+                        options = options,
                         explanation = "Verified directly from page ${fBlock.pageNumber} of the text.",
                         sources = listOf(
                             SourceReference(
